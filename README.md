@@ -1,6 +1,6 @@
 # Pankosmia — mon espace de travail
 
-Un tableau de bord personnel pour suivre les dépôts publics, issues et pull requests ouvertes de l’organisation [pankosmia](https://github.com/pankosmia). L’interface est en français et organise le travail avec des onglets : Ma journée, Issues, Pull requests et Dépôts.
+Un tableau de bord personnel pour suivre les dépôts publics, issues et pull requests ouvertes de l’organisation [pankosmia](https://github.com/pankosmia). L’interface est en français. Onglets « Mon travail » : Ma journée, PR à valider, Mes issues, Mes PR. Onglets « Organisation » : Toutes les issues, Toutes les PR, Dépôts. Des alertes (PR à valider > 2 j / 5 j, PR > 3 j / 7 j, issues > 14 j / 30 j) signalent ce qui prend du retard ; les seuils sont modifiables dans `THRESHOLDS` (`app.js`). Filtres : personne, label, milestone, dépôt, priorité (déduite des labels).
 
 ## Démarrer
 
