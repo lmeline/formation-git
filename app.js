@@ -8,21 +8,44 @@ const state = {
   username: "",
   search: "",
   repo: "all",
+  person: "all",
+  label: "all",
+  milestone: "all",
+  priority: "all",
+  reviewRequests: [],
+  closedIssues: [],
 };
+
+const DAY = 86400000;
+const THRESHOLDS = {
+  review: { warn: 2, alert: 5 },
+  pull: { warn: 3, alert: 7 },
+  issue: { warn: 14, alert: 30 },
+};
+const HIGH_PRIORITY = /(priorit[ée]|urgent|critique|critical|blocker|bloquant|high|haute|\bp[01]\b)/i;
+const LIST_TABS = ["review", "myissues", "mypulls", "issues", "pulls"];
 
 const content = document.querySelector("#dashboard-content");
 const tabs = [...document.querySelectorAll("[data-tab]")];
 const usernameInput = document.querySelector("#username-input");
 const searchInput = document.querySelector("#search-input");
 const repoSelect = document.querySelector("#repo-select");
+const personSelect = document.querySelector("#person-select");
+const labelSelect = document.querySelector("#label-select");
+const milestoneSelect = document.querySelector("#milestone-select");
+const prioritySelect = document.querySelector("#priority-select");
+const toolbar = document.querySelector("#list-toolbar");
 const errorMessage = document.querySelector("#error-message");
 const statusText = document.querySelector("#connection-status");
 const statusDot = document.querySelector(".status-dot");
 
 const pageLabels = {
   today: "Ma journée",
-  issues: "Issues",
-  pulls: "Pull requests",
+  review: "PR à valider",
+  myissues: "Mes issues",
+  mypulls: "Mes PR",
+  issues: "Toutes les issues",
+  pulls: "Toutes les PR",
   repos: "Dépôts",
 };
 
@@ -42,10 +65,53 @@ function repoName(item) {
   return item.repository?.name || item.repository_url?.split("/").pop() || "Dépôt";
 }
 
+function login() {
+  return state.username.trim().replace(/^@/, "").toLocaleLowerCase();
+}
+
+function people(item) {
+  return [item.user?.login, ...(item.assignees || []).map((person) => person.login)]
+    .filter(Boolean).map((name) => name.toLocaleLowerCase());
+}
+
+function isHighPriority(item) {
+  return (item.labels || []).some((label) => HIGH_PRIORITY.test(label.name));
+}
+
+function ageDays(item, from = item.created_at, to = Date.now()) {
+  return Math.max(0, (new Date(to) - new Date(from)) / DAY);
+}
+
+function formatDays(days) {
+  if (days < 1) return "moins d’un jour";
+  const rounded = Math.round(days);
+  return `${rounded} jour${rounded > 1 ? "s" : ""}`;
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function alertLevel(item, kind) {
+  const days = ageDays(item);
+  const limits = THRESHOLDS[kind];
+  if (days >= limits.alert) return "alert";
+  if (days >= limits.warn) return "warn";
+  return "ok";
+}
+
 function filteredItems(items) {
   const query = state.search.trim().toLocaleLowerCase("fr");
   return items.filter((item) => {
     if (state.repo !== "all" && repoName(item) !== state.repo) return false;
+    if (state.person !== "all" && !people(item).includes(state.person)) return false;
+    if (state.label !== "all" && !(item.labels || []).some((label) => label.name === state.label)) return false;
+    if (state.milestone !== "all" && item.milestone?.title !== state.milestone) return false;
+    if (state.priority === "high" && !isHighPriority(item)) return false;
+    if (state.priority === "normal" && isHighPriority(item)) return false;
     if (!query) return true;
     const searchable = [
       item.title,
@@ -58,8 +124,9 @@ function filteredItems(items) {
   });
 }
 
-function makeItemCard(item, pull = Boolean(item.pull_request)) {
-  const card = element("article", "item-card");
+function makeItemCard(item, pull = Boolean(item.pull_request), kind = pull ? "pull" : "issue") {
+  const level = alertLevel(item, kind);
+  const card = element("article", `item-card level-${level}`);
   card.append(element("span", `item-symbol${pull ? " pull" : ""}`, pull ? "⑂" : "◉"));
 
   const main = element("div", "item-main");
@@ -76,7 +143,10 @@ function makeItemCard(item, pull = Boolean(item.pull_request)) {
   repoLink.rel = "noreferrer";
   metadata.append(repoLink);
   metadata.append(element("span", "", `#${item.number}`));
+  metadata.append(element("span", "age", `Ouverte depuis ${formatDays(ageDays(item))}`));
   metadata.append(element("span", "", `Mis à jour le ${shortDate(item.updated_at)}`));
+  if (item.milestone?.title) metadata.append(element("span", "", `Milestone : ${item.milestone.title}`));
+  if (!pull && !item.assignees?.length) metadata.append(element("span", "unassigned", "Non assignée"));
   if (item.assignees?.length) {
     metadata.append(element("span", "", `Assigné à ${item.assignees.map((person) => person.login).join(", ")}`));
   }
@@ -88,16 +158,21 @@ function makeItemCard(item, pull = Boolean(item.pull_request)) {
     main.append(labels);
   }
   card.append(main);
+  const badges = element("div", "badges");
+  if (isHighPriority(item)) badges.append(element("span", "badge priority", "Prioritaire"));
+  if (level === "alert") badges.append(element("span", "badge alert", "En retard"));
+  else if (level === "warn") badges.append(element("span", "badge warn", "À traiter"));
+  if (badges.children.length) card.append(badges);
   return card;
 }
 
-function appendItems(parent, items, pull = null) {
+function appendItems(parent, items, pull = null, kind = undefined) {
   if (!items.length) {
     parent.append(emptyState("Rien à afficher", "Aucun élément ne correspond à ces filtres."));
     return;
   }
   const list = element("div", "work-list");
-  items.forEach((item) => list.append(makeItemCard(item, pull === null ? Boolean(item.pull_request) : pull)));
+  items.forEach((item) => list.append(makeItemCard(item, pull === null ? Boolean(item.pull_request) : pull, kind)));
   parent.append(list);
 }
 
@@ -124,22 +199,63 @@ function sectionHeading(title, detail, linkTab) {
   return heading;
 }
 
-function makeStat(label, number, symbol) {
+function makeStat(label, number, symbol, hint) {
   const card = element("article", "stat-card");
   const text = element("div");
   text.append(element("p", "stat-label", label), element("p", "stat-number", String(number)));
+  if (hint) text.append(element("p", "stat-hint", hint));
   card.append(text, element("span", "stat-icon", symbol));
   return card;
 }
 
+function myIssues() {
+  const me = login();
+  return state.issues.filter((item) => item.assignees?.some((person) => person.login.toLocaleLowerCase() === me));
+}
+
+function myPulls() {
+  const me = login();
+  return state.pulls.filter((item) => people(item).includes(me));
+}
+
+function reviewPulls() {
+  const me = login();
+  return state.reviewRequests.filter((item) => item.user?.login?.toLocaleLowerCase() !== me);
+}
+
+function medianHint(days) {
+  return days === null ? "Pas assez de données" : `Âge médian : ${formatDays(days)}`;
+}
+
 function renderStats() {
+  const resolution = state.closedIssues.map((item) => ageDays(item, item.created_at, item.closed_at));
+  const resolved = median(resolution);
   const grid = element("div", "stats-grid");
   grid.append(
-    makeStat("Issues ouvertes", state.issues.length, "◉"),
-    makeStat("Pull requests ouvertes", state.pulls.length, "⑂"),
-    makeStat("Dépôts publics", state.repos.length, "▦"),
+    makeStat("PR à valider", reviewPulls().length, "✓", medianHint(median(reviewPulls().map((item) => ageDays(item))))),
+    makeStat("Mes PR ouvertes", myPulls().length, "⑂", medianHint(median(myPulls().map((item) => ageDays(item))))),
+    makeStat("Issues résolues (30 j)", state.closedIssues.length,
+      "◉", resolved === null ? "Pas assez de données" : `Résolution médiane : ${formatDays(resolved)}`),
   );
   return grid;
+}
+
+function renderAlerts(parent, entries) {
+  const urgent = entries.filter(({ item, kind }) => alertLevel(item, kind) === "alert");
+  parent.append(sectionHeading("Alertes", `${urgent.length} élément(s) en retard`));
+  if (!urgent.length) {
+    parent.append(emptyState("Tout est à jour", "Aucun élément ne dépasse les seuils d’alerte."));
+    return;
+  }
+  const list = element("div", "work-list");
+  urgent.forEach(({ item, kind }) => list.append(makeItemCard(item, kind !== "issue", kind)));
+  parent.append(list);
+}
+
+function thresholdLegend() {
+  return element("p", "threshold-legend",
+    `Seuils (à traiter / en retard) : PR à valider ${THRESHOLDS.review.warn} j / ${THRESHOLDS.review.alert} j · ` +
+    `PR ${THRESHOLDS.pull.warn} j / ${THRESHOLDS.pull.alert} j · issues ${THRESHOLDS.issue.warn} j / ${THRESHOLDS.issue.alert} j.`);
 }
 
 function makeRepoCard(repo) {
@@ -173,49 +289,67 @@ function renderRepos(parent, repositories) {
   parent.append(grid);
 }
 
+function requireUsername(parent) {
+  parent.append(emptyState("Quel est votre identifiant GitHub ?", "Saisissez-le ci-dessus pour afficher ce qui vous concerne."));
+}
+
 function render() {
   content.replaceChildren();
-  const title = document.querySelector("#page-title");
-  const description = document.querySelector("#page-description");
-  const breadcrumb = document.querySelector("#breadcrumb-current");
   const messages = {
-    today: ["Bonjour, organisons la journée.", "Un aperçu clair de vos issues, pull requests et dépôts."],
-    issues: ["Issues ouvertes", "Suivez les demandes et problèmes des dépôts Pankosmia."],
-    pulls: ["Pull requests ouvertes", "Retrouvez les changements en cours dans l’organisation."],
+    today: ["Bonjour, voici votre journée.", "Ce que vous avez à faire aujourd’hui, du plus urgent au plus récent."],
+    review: ["Pull requests à valider", "Les PR pour lesquelles on vous demande une review."],
+    myissues: ["Mes issues", "Les issues ouvertes qui vous sont assignées."],
+    mypulls: ["Mes pull requests", "Les PR que vous avez ouvertes ou qui vous sont assignées."],
+    issues: ["Toutes les issues ouvertes", "Vue d’ensemble de l’organisation Pankosmia."],
+    pulls: ["Toutes les pull requests ouvertes", "Vue d’ensemble de l’organisation Pankosmia."],
     repos: ["Les dépôts Pankosmia", "Explorez les projets publics et leur activité récente."],
   };
-  title.textContent = messages[state.tab][0];
-  description.textContent = messages[state.tab][1];
-  breadcrumb.textContent = pageLabels[state.tab];
-  if (state.tab === "today") {
-    content.append(renderStats());
-    const username = state.username.trim().replace(/^@/, "").toLocaleLowerCase();
-    if (!username) {
-      content.append(sectionHeading("Votre espace de travail", "Personnalisez votre suivi"));
-      content.append(emptyState("Quel est votre identifiant GitHub ?", "Saisissez-le ci-dessus pour mettre en avant les issues et pull requests qui vous sont assignées."));
-      content.append(sectionHeading("Activité récente", "Derniers éléments mis à jour"));
-      appendItems(content, [...state.issues, ...state.pulls]
-        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
-        .slice(0, 5));
-      return;
-    }
-    const assignedIssues = filteredItems(state.issues.filter((item) =>
-      item.assignees?.some((person) => person.login.toLocaleLowerCase() === username)));
-    const assignedPulls = filteredItems(state.pulls.filter((item) =>
-      item.user?.login?.toLocaleLowerCase() === username ||
-      item.assignees?.some((person) => person.login.toLocaleLowerCase() === username)));
-    content.append(sectionHeading("Mes issues", `${assignedIssues.length} assignée(s)`, "issues"));
-    appendItems(content, assignedIssues);
-    content.append(sectionHeading("Mes pull requests", `${assignedPulls.length} assignée(s)`, "pulls"));
-    appendItems(content, assignedPulls, true);
+  document.querySelector("#page-title").textContent = messages[state.tab][0];
+  document.querySelector("#page-description").textContent = messages[state.tab][1];
+  document.querySelector("#breadcrumb-current").textContent = pageLabels[state.tab];
+  toolbar.hidden = state.tab === "today";
+  updateCounts();
+
+  const mine = ["today", "review", "myissues", "mypulls"].includes(state.tab);
+  if (mine && !login()) {
+    requireUsername(content);
     return;
   }
 
-  if (state.tab === "issues" || state.tab === "pulls") {
-    const isPull = state.tab === "pulls";
-    const items = filteredItems(isPull ? state.pulls : state.issues);
-    content.append(sectionHeading(`${items.length} élément(s)`, "Éléments ouverts · triés par mise à jour"));
-    appendItems(content, items, isPull);
+  const byAge = (a, b) => new Date(a.created_at) - new Date(b.created_at);
+  if (state.tab === "today") {
+    const reviews = reviewPulls().sort(byAge);
+    const pulls = myPulls().sort(byAge);
+    const issues = myIssues().sort(byAge);
+    content.append(renderStats());
+    renderAlerts(content, [
+      ...reviews.map((item) => ({ item, kind: "review" })),
+      ...pulls.map((item) => ({ item, kind: "pull" })),
+      ...issues.map((item) => ({ item, kind: "issue" })),
+    ]);
+    content.append(sectionHeading("PR à valider", `${reviews.length} en attente`, "review"));
+    appendItems(content, reviews.slice(0, 5), true, "review");
+    content.append(sectionHeading("Mes issues à faire", `${issues.length} assignée(s)`, "myissues"));
+    appendItems(content, issues.slice(0, 5), false, "issue");
+    content.append(sectionHeading("Mes pull requests", `${pulls.length} ouverte(s)`, "mypulls"));
+    appendItems(content, pulls.slice(0, 5), true, "pull");
+    content.append(thresholdLegend());
+    return;
+  }
+
+  if (LIST_TABS.includes(state.tab)) {
+    const sources = {
+      review: [reviewPulls(), true, "review"],
+      myissues: [myIssues(), false, "issue"],
+      mypulls: [myPulls(), true, "pull"],
+      issues: [state.issues, false, "issue"],
+      pulls: [state.pulls, true, "pull"],
+    };
+    const [source, isPull, kind] = sources[state.tab];
+    const items = filteredItems(source).sort(byAge);
+    content.append(sectionHeading(`${items.length} élément(s)`, "Du plus ancien au plus récent"));
+    appendItems(content, items, isPull, kind);
+    content.append(thresholdLegend());
     return;
   }
 
@@ -228,9 +362,40 @@ function render() {
   renderRepos(content, repositories);
 }
 
+function updateCounts() {
+  const hasUser = Boolean(login());
+  const counts = {
+    "today-tab-count": hasUser ? reviewPulls().length + myIssues().length + myPulls().length : "—",
+    "review-tab-count": hasUser ? reviewPulls().length : "—",
+    "myissues-tab-count": hasUser ? myIssues().length : "—",
+    "mypulls-tab-count": hasUser ? myPulls().length : "—",
+  };
+  Object.entries(counts).forEach(([id, value]) => { document.querySelector(`#${id}`).textContent = value; });
+}
+
+function fillSelect(select, allLabel, values) {
+  const previous = select.value;
+  select.replaceChildren(new Option(allLabel, "all"));
+  [...new Set(values)].filter(Boolean).sort((a, b) => a.localeCompare(b, "fr")).forEach((value) => select.add(new Option(value, value)));
+  select.value = [...select.options].some((option) => option.value === previous) ? previous : "all";
+  return select.value;
+}
+
+function fillFilters() {
+  const all = [...state.issues, ...state.pulls];
+  state.person = fillSelect(personSelect, "Toutes les personnes", all.flatMap(people));
+  state.label = fillSelect(labelSelect, "Tous les labels", all.flatMap((item) => (item.labels || []).map((label) => label.name)));
+  state.milestone = fillSelect(milestoneSelect, "Tous les milestones", all.map((item) => item.milestone?.title));
+}
+
 function setTab(tab) {
   state.tab = tab;
-  tabs.forEach((button) => {
+  [[personSelect, "person"], [labelSelect, "label"], [milestoneSelect, "milestone"], [prioritySelect, "priority"]]
+  .forEach(([select, key]) => select.addEventListener("change", () => {
+    state[key] = select.value;
+    render();
+  }));
+tabs.forEach((button) => {
     const selected = button.dataset.tab === tab;
     button.classList.toggle("active", selected);
     if (selected) button.setAttribute("aria-current", "page");
@@ -273,11 +438,18 @@ async function loadDashboard() {
   content.replaceChildren(element("div", "loading-state", "Chargement des données publiques de Pankosmia…"));
 
   try {
-    const [repos, issues, pulls] = await Promise.all([
+    const me = login();
+    const since = new Date(Date.now() - 30 * DAY).toISOString().slice(0, 10);
+    const [repos, issues, pulls, reviews, closed] = await Promise.all([
       getJson(`${API_ROOT}/orgs/${ORGANIZATION}/repos?per_page=100&sort=updated`),
       getSearchResults(`org:${ORGANIZATION} is:open is:issue`),
       getSearchResults(`org:${ORGANIZATION} is:open is:pr`),
+      me ? getSearchResults(`org:${ORGANIZATION} is:open is:pr review-requested:${me}`) : [],
+      me ? getSearchResults(`org:${ORGANIZATION} is:issue is:closed assignee:${me} closed:>=${since}`) : [],
     ]);
+    state.reviewRequests = reviews;
+    state.closedIssues = closed;
+    fillFilters();
     state.repos = repos;
     state.issues = issues.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
     state.pulls = pulls.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
@@ -308,6 +480,7 @@ try {
 } catch {
   state.username = "";
 }
+let reloadTimer;
 usernameInput.value = state.username;
 usernameInput.addEventListener("input", () => {
   state.username = usernameInput.value.trim();
@@ -316,7 +489,9 @@ usernameInput.addEventListener("input", () => {
   } catch {
     // The dashboard remains usable when browser storage is unavailable.
   }
-  if (state.tab === "today") render();
+  render();
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(loadDashboard, 700);
 });
 searchInput.addEventListener("input", () => {
   state.search = searchInput.value;
