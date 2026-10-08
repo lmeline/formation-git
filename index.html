@@ -16,17 +16,34 @@
           <span>pankosmia<span class="brand-subtitle">mon espace</span></span>
         </a>
 
-        <p class="nav-label">ESPACE DE TRAVAIL</p>
-        <nav class="tabs" aria-label="Onglets du tableau de bord">
+        <p class="nav-label">MON TRAVAIL</p>
+        <nav class="tabs" aria-label="Mon travail">
           <button class="tab active" type="button" data-tab="today" aria-current="page">
             <span class="tab-icon" aria-hidden="true">◷</span> Ma journée
+            <span class="tab-count" id="today-tab-count">—</span>
           </button>
+          <button class="tab" type="button" data-tab="review">
+            <span class="tab-icon" aria-hidden="true">✓</span> PR à valider
+            <span class="tab-count" id="review-tab-count">—</span>
+          </button>
+          <button class="tab" type="button" data-tab="myissues">
+            <span class="tab-icon" aria-hidden="true">◉</span> Mes issues
+            <span class="tab-count" id="myissues-tab-count">—</span>
+          </button>
+          <button class="tab" type="button" data-tab="mypulls">
+            <span class="tab-icon" aria-hidden="true">⑂</span> Mes PR
+            <span class="tab-count" id="mypulls-tab-count">—</span>
+          </button>
+        </nav>
+
+        <p class="nav-label">ORGANISATION</p>
+        <nav class="tabs" aria-label="Organisation">
           <button class="tab" type="button" data-tab="issues">
-            <span class="tab-icon" aria-hidden="true">◉</span> Issues
+            <span class="tab-icon" aria-hidden="true">◉</span> Toutes les issues
             <span class="tab-count" id="issue-tab-count">—</span>
           </button>
           <button class="tab" type="button" data-tab="pulls">
-            <span class="tab-icon" aria-hidden="true">⑂</span> Pull requests
+            <span class="tab-icon" aria-hidden="true">⑂</span> Toutes les PR
             <span class="tab-count" id="pull-tab-count">—</span>
           </button>
           <button class="tab" type="button" data-tab="repos">
@@ -53,7 +70,7 @@
           <div>
             <p class="eyebrow">ORGANISATION · PANKOSMIA</p>
             <h1 id="page-title">Bonjour, organisons la journée.</h1>
-            <p class="page-description" id="page-description">Un aperçu clair de vos issues, pull requests et dépôts.</p>
+            <p class="page-description" id="page-description">Ce que vous avez à faire aujourd’hui.</p>
           </div>
           <label class="username-field">
             <span>Votre identifiant GitHub</span>
@@ -71,6 +88,22 @@
             <span class="visually-hidden">Filtrer par dépôt</span>
             <select id="repo-select" aria-label="Filtrer par dépôt">
               <option value="all">Tous les dépôts</option>
+            </select>
+          </label>
+          <label class="repo-filter"><span class="visually-hidden">Filtrer par personne</span>
+            <select id="person-select" aria-label="Filtrer par personne"><option value="all">Toutes les personnes</option></select>
+          </label>
+          <label class="repo-filter"><span class="visually-hidden">Filtrer par label</span>
+            <select id="label-select" aria-label="Filtrer par label"><option value="all">Tous les labels</option></select>
+          </label>
+          <label class="repo-filter"><span class="visually-hidden">Filtrer par milestone</span>
+            <select id="milestone-select" aria-label="Filtrer par milestone"><option value="all">Tous les milestones</option></select>
+          </label>
+          <label class="repo-filter"><span class="visually-hidden">Filtrer par priorité</span>
+            <select id="priority-select" aria-label="Filtrer par priorité">
+              <option value="all">Toutes les priorités</option>
+              <option value="high">Haute / urgente</option>
+              <option value="normal">Autre</option>
             </select>
           </label>
         </div>
