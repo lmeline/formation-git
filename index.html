@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f7f9">
+    <title>Mon espace Pankosmia</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#" aria-label="Mon espace Pankosmia, accueil">
+          <span class="brand-mark" aria-hidden="true">p</span>
+          <span>pankosmia<span class="brand-subtitle">mon espace</span></span>
+        </a>
+
+        <p class="nav-label">ESPACE DE TRAVAIL</p>
+        <nav class="tabs" aria-label="Onglets du tableau de bord">
+          <button class="tab active" type="button" data-tab="today" aria-current="page">
+            <span class="tab-icon" aria-hidden="true">◷</span> Ma journée
+          </button>
+          <button class="tab" type="button" data-tab="issues">
+            <span class="tab-icon" aria-hidden="true">◉</span> Issues
+            <span class="tab-count" id="issue-tab-count">—</span>
+          </button>
+          <button class="tab" type="button" data-tab="pulls">
+            <span class="tab-icon" aria-hidden="true">⑂</span> Pull requests
+            <span class="tab-count" id="pull-tab-count">—</span>
+          </button>
+          <button class="tab" type="button" data-tab="repos">
+            <span class="tab-icon" aria-hidden="true">▦</span> Dépôts
+            <span class="tab-count" id="repo-tab-count">—</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="connection-status">Connexion aux données publiques…</span>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="breadcrumbs"><span>Mon espace</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">Ma journée</strong></div>
+          <button class="refresh-button" id="refresh-button" type="button">
+            <span aria-hidden="true">↻</span> Actualiser
+          </button>
+        </header>
+
+        <section class="page-heading">
+          <div>
+            <p class="eyebrow">ORGANISATION · PANKOSMIA</p>
+            <h1 id="page-title">Bonjour, organisons la journée.</h1>
+            <p class="page-description" id="page-description">Un aperçu clair de vos issues, pull requests et dépôts.</p>
+          </div>
+          <label class="username-field">
+            <span>Votre identifiant GitHub</span>
+            <input id="username-input" type="text" autocomplete="username" placeholder="Ex. : octocat" maxlength="39">
+          </label>
+        </section>
+
+        <div class="toolbar" id="list-toolbar">
+          <label class="search-field">
+            <span class="visually-hidden">Rechercher dans les éléments</span>
+            <span aria-hidden="true">⌕</span>
+            <input id="search-input" type="search" placeholder="Rechercher un titre, un dépôt…">
+          </label>
+          <label class="repo-filter">
+            <span class="visually-hidden">Filtrer par dépôt</span>
+            <select id="repo-select" aria-label="Filtrer par dépôt">
+              <option value="all">Tous les dépôts</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="error-message" class="error-message" role="alert" hidden></div>
+        <section id="dashboard-content" aria-live="polite"></section>
+        <footer class="page-footer">Lecture seule · Données publiques de GitHub · <a href="https://github.com/pankosmia" target="_blank" rel="noreferrer">Voir l’organisation ↗</a></footer>
+      </main>
+    </div>
+  </body>
+</html>
